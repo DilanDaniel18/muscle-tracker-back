@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: muscle_tracker_mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-muscle_tracker_db}
+      MYSQL_USER: ${DB_USER:-tracker_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-tracker_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - muscle_tracker_net
+
+networks:
+  muscle_tracker_net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
