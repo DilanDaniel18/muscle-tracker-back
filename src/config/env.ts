@@ -12,4 +12,8 @@ export const ENV = {
     USER: process.env.DB_USER || 'tracker_user',
     PASSWORD: process.env.DB_PASSWORD || 'tracker_password',
   },
+  JWT: {
+    SECRET: process.env.JWT_SECRET || 'muscle_tracker_jwt_secret_key_2026',
+    EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
+  },
 } as const;
