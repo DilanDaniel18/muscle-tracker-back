@@ -1,11 +1,14 @@
 import bcrypt from 'bcryptjs';
 import {
+  AuthSessionResponse,
   CreateUserDTO,
+  LoginUserDTO,
   RegisteredUserResponse,
   User,
   UserSex,
 } from './user.entity.js';
 import { UserRepository } from './user.repository.js';
+import { SessionManager } from './session.manager.js';
 
 export class UserAlreadyExistsError extends Error {
   constructor(email: string) {
@@ -18,6 +21,13 @@ export class UserNotFoundError extends Error {
   constructor(id: string) {
     super(`No se encontró ningún usuario con el ID: ${id}`);
     this.name = 'UserNotFoundError';
+  }
+}
+
+export class InvalidCredentialsError extends Error {
+  constructor(message = 'Correo electrónico o contraseña incorrectos.') {
+    super(message);
+    this.name = 'InvalidCredentialsError';
   }
 }
 
@@ -87,6 +97,91 @@ export class RegisterUserUseCase {
       email,
       password: hashedPassword,
     });
+  }
+}
+
+export class LoginUserUseCase {
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly sessionManager: SessionManager
+  ) { }
+
+  async execute(dto: LoginUserDTO): Promise<AuthSessionResponse> {
+    const email = typeof dto.email === 'string' ? dto.email.trim().toLowerCase() : '';
+    const password = dto.password;
+
+    if (!email) {
+      throw new ValidationError('El correo electrónico es obligatorio.');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new ValidationError('El formato del correo electrónico no es válido.');
+    }
+
+    if (!password || typeof password !== 'string') {
+      throw new ValidationError('La contraseña es obligatoria.');
+    }
+
+    const userWithPassword = await this.userRepository.findByEmailWithPassword(email);
+    if (!userWithPassword) {
+      throw new InvalidCredentialsError();
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, userWithPassword.password);
+    if (!isPasswordValid) {
+      throw new InvalidCredentialsError();
+    }
+
+    const user: User = {
+      id: userWithPassword.id,
+      name: userWithPassword.name,
+      lastName: userWithPassword.lastName,
+      email: userWithPassword.email,
+      birthDate: userWithPassword.birthDate ?? null,
+      weight: userWithPassword.weight ?? null,
+      height: userWithPassword.height ?? null,
+      sex: userWithPassword.sex ?? null,
+    };
+
+    const sessionData = this.sessionManager.createSession(user);
+
+    return {
+      user,
+      token: sessionData.token,
+      expiresIn: sessionData.expiresIn,
+      expiresAt: sessionData.expiresAt,
+    };
+  }
+}
+
+export class GetCurrentUserSessionUseCase {
+  constructor(private readonly userRepository: UserRepository) { }
+
+  async execute(userId: string): Promise<User> {
+    const id = typeof userId === 'string' ? userId.trim() : '';
+    if (!id) {
+      throw new ValidationError('El ID del usuario en la sesión es obligatorio.');
+    }
+
+    const user = await this.userRepository.findById(id);
+    if (!user) {
+      throw new UserNotFoundError(id);
+    }
+
+    return user;
+  }
+}
+
+export class LogoutUserUseCase {
+  constructor(private readonly sessionManager: SessionManager) { }
+
+  execute(token: string): void {
+    if (!token || typeof token !== 'string') {
+      throw new ValidationError('El token de sesión es obligatorio para cerrar sesión.');
+    }
+
+    this.sessionManager.revokeSession(token);
   }
 }
 

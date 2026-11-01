@@ -7,12 +7,26 @@ import {
   RegisteredUserResponse,
   UpdateUserAdditionalDataDTO,
   User,
+  UserWithPassword,
 } from './user.entity.js';
 import { UserRepository } from './user.repository.js';
 
 export class TypeormUserRepository implements UserRepository {
   private get repository(): Repository<UserEntity> {
     return AppDataSource.getRepository(UserEntity);
+  }
+
+  private formatBirthDate(birthDate?: Date | string | null): string | null {
+    if (!birthDate) {
+      return null;
+    }
+    if (birthDate instanceof Date) {
+      const y = birthDate.getFullYear();
+      const m = String(birthDate.getMonth() + 1).padStart(2, '0');
+      const d = String(birthDate.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(birthDate).split('T')[0];
   }
 
   async registerUser(userData: CreateUserDTO): Promise<RegisteredUserResponse> {
@@ -51,6 +65,30 @@ export class TypeormUserRepository implements UserRepository {
     };
   }
 
+  async findByEmailWithPassword(email: string): Promise<UserWithPassword | null> {
+    const user = await this.repository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.email = :email', { email })
+      .getOne();
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      lastName: user.lastName,
+      email: user.email,
+      password: user.password,
+      birthDate: this.formatBirthDate(user.birthDate),
+      weight: user.weight !== null && user.weight !== undefined ? Number(user.weight) : null,
+      height: user.height !== null && user.height !== undefined ? Number(user.height) : null,
+      sex: user.sex ?? null,
+    };
+  }
+
   async findById(id: string): Promise<User | null> {
     const user = await this.repository.findOne({
       where: { id },
@@ -60,24 +98,12 @@ export class TypeormUserRepository implements UserRepository {
       return null;
     }
 
-    let formattedBirthDate: string | null = null;
-    if (user.birthDate) {
-      if (user.birthDate instanceof Date) {
-        const y = user.birthDate.getFullYear();
-        const m = String(user.birthDate.getMonth() + 1).padStart(2, '0');
-        const d = String(user.birthDate.getDate()).padStart(2, '0');
-        formattedBirthDate = `${y}-${m}-${d}`;
-      } else {
-        formattedBirthDate = String(user.birthDate).split('T')[0];
-      }
-    }
-
     return {
       id: user.id,
       name: user.name,
       lastName: user.lastName,
       email: user.email,
-      birthDate: formattedBirthDate,
+      birthDate: this.formatBirthDate(user.birthDate),
       weight: user.weight !== null && user.weight !== undefined ? Number(user.weight) : null,
       height: user.height !== null && user.height !== undefined ? Number(user.height) : null,
       sex: user.sex ?? null,

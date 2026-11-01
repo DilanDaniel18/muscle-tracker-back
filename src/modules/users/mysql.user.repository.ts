@@ -6,6 +6,7 @@ import {
   UpdateUserAdditionalDataDTO,
   User,
   UserSex,
+  UserWithPassword,
 } from './user.entity.js';
 import { UserRepository } from './user.repository.js';
 
@@ -14,6 +15,7 @@ interface UserRow extends RowDataPacket {
   name: string;
   lastName: string;
   email: string;
+  password?: string;
   birthDate?: Date | string | null;
   weight?: string | number | null;
   height?: number | null;
@@ -21,6 +23,19 @@ interface UserRow extends RowDataPacket {
 }
 
 export class MysqlUserRepository implements UserRepository {
+  private formatBirthDate(birthDate?: Date | string | null): string | null {
+    if (!birthDate) {
+      return null;
+    }
+    if (birthDate instanceof Date) {
+      const y = birthDate.getFullYear();
+      const m = String(birthDate.getMonth() + 1).padStart(2, '0');
+      const d = String(birthDate.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(birthDate).split('T')[0];
+  }
+
   async registerUser(userData: CreateUserDTO): Promise<RegisteredUserResponse> {
     await dbPool.query('CALL QueryInsert_RegisterUser(?, ?, ?, ?)', [
       userData.name,
@@ -58,6 +73,30 @@ export class MysqlUserRepository implements UserRepository {
     };
   }
 
+  async findByEmailWithPassword(email: string): Promise<UserWithPassword | null> {
+    const [rows] = await dbPool.query<UserRow[]>(
+      'SELECT id, name, lastName, email, password, birthDate, weight, height, sex FROM UsersMT WHERE email = ? LIMIT 1',
+      [email]
+    );
+
+    if (!rows || rows.length === 0 || !rows[0].password) {
+      return null;
+    }
+
+    const row = rows[0];
+    return {
+      id: row.id,
+      name: row.name,
+      lastName: row.lastName,
+      email: row.email,
+      password: row.password!,
+      birthDate: this.formatBirthDate(row.birthDate),
+      weight: row.weight !== null && row.weight !== undefined ? Number(row.weight) : null,
+      height: row.height !== null && row.height !== undefined ? Number(row.height) : null,
+      sex: row.sex ?? null,
+    };
+  }
+
   async findById(id: string): Promise<User | null> {
     const [rows] = await dbPool.query<UserRow[]>(
       'SELECT id, name, lastName, email, birthDate, weight, height, sex FROM UsersMT WHERE id = ? LIMIT 1',
@@ -69,24 +108,12 @@ export class MysqlUserRepository implements UserRepository {
     }
 
     const row = rows[0];
-    let formattedBirthDate: string | null = null;
-    if (row.birthDate) {
-      if (row.birthDate instanceof Date) {
-        const y = row.birthDate.getFullYear();
-        const m = String(row.birthDate.getMonth() + 1).padStart(2, '0');
-        const d = String(row.birthDate.getDate()).padStart(2, '0');
-        formattedBirthDate = `${y}-${m}-${d}`;
-      } else {
-        formattedBirthDate = String(row.birthDate).split('T')[0];
-      }
-    }
-
     return {
       id: row.id,
       name: row.name,
       lastName: row.lastName,
       email: row.email,
-      birthDate: formattedBirthDate,
+      birthDate: this.formatBirthDate(row.birthDate),
       weight: row.weight !== null && row.weight !== undefined ? Number(row.weight) : null,
       height: row.height !== null && row.height !== undefined ? Number(row.height) : null,
       sex: row.sex ?? null,
