@@ -39,7 +39,10 @@ export class ValidationError extends Error {
 }
 
 export class RegisterUserUseCase {
-  constructor(private readonly userRepository: UserRepository) { }
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly sessionManager?: SessionManager
+  ) { }
 
   async execute(dto: CreateUserDTO): Promise<RegisteredUserResponse> {
     const name = dto.name?.trim();
@@ -91,12 +94,34 @@ export class RegisterUserUseCase {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    return await this.userRepository.registerUser({
+    const registeredUser = await this.userRepository.registerUser({
       name,
       lastName,
       email,
       password: hashedPassword,
     });
+
+    if (this.sessionManager) {
+      const sessionData = this.sessionManager.createSession({
+        id: registeredUser.id,
+        name: registeredUser.name,
+        lastName: registeredUser.lastName,
+        email: registeredUser.email,
+        birthDate: null,
+        weight: null,
+        height: null,
+        sex: null,
+      });
+
+      return {
+        ...registeredUser,
+        token: sessionData.token,
+        expiresIn: sessionData.expiresIn,
+        expiresAt: sessionData.expiresAt,
+      };
+    }
+
+    return registeredUser;
   }
 }
 
@@ -128,7 +153,11 @@ export class LoginUserUseCase {
       throw new InvalidCredentialsError();
     }
 
-    const isPasswordValid = await bcrypt.compare(password, userWithPassword.password);
+    const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(userWithPassword.password);
+    const isPasswordValid = isBcryptHash
+      ? await bcrypt.compare(password, userWithPassword.password)
+      : password === userWithPassword.password;
+
     if (!isPasswordValid) {
       throw new InvalidCredentialsError();
     }
@@ -142,6 +171,10 @@ export class LoginUserUseCase {
       weight: userWithPassword.weight ?? null,
       height: userWithPassword.height ?? null,
       sex: userWithPassword.sex ?? null,
+      activityTypes: userWithPassword.activityTypes ?? [],
+      isBeginner: userWithPassword.isBeginner ?? false,
+      exerciseFrequency: userWithPassword.exerciseFrequency ?? null,
+      onboardingCompleted: userWithPassword.onboardingCompleted ?? false,
     };
 
     const sessionData = this.sessionManager.createSession(user);

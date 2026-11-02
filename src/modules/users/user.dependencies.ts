@@ -13,7 +13,7 @@ import { UserController } from './user.controller.js';
 const userRepository = new TypeormUserRepository();
 export const sessionManager = new JwtSessionManager();
 
-export const registerUserUseCase = new RegisterUserUseCase(userRepository);
+export const registerUserUseCase = new RegisterUserUseCase(userRepository, sessionManager);
 export const updateUserAdditionalDataUseCase = new UpdateUserAdditionalDataUseCase(userRepository);
 export const loginUserUseCase = new LoginUserUseCase(userRepository, sessionManager);
 export const getCurrentUserSessionUseCase = new GetCurrentUserSessionUseCase(userRepository);
