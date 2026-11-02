@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { healthRouter } from './modules/health/health.routes.js';
 import { userRouter } from './modules/users/user.routes.js';
+import { onboardingRouter } from './modules/onboarding/onboarding.routes.js';
 
 export const app = express();
 
@@ -19,6 +20,8 @@ app.get('/', (_req: Request, res: Response) => {
 
 app.use('/api/health', healthRouter);
 app.use('/api/users', userRouter);
+app.use('/api/auth', userRouter);
+app.use('/api/onboarding', onboardingRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
